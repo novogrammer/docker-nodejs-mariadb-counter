@@ -1,6 +1,5 @@
 import express from "express";
 import mysql from "mysql2/promise";
-import dayjs from "dayjs";
 
 
 const port=3000;
@@ -11,6 +10,8 @@ const dbConfig={
   database:"db",
 };
 
+const counterName="myCounterName";
+
 const app=express();
 
 
@@ -18,22 +19,15 @@ app.get("/", (req, res) => {
   res.send('Hello World!')
 });
 
-function getTodayDateString(now){
-  return now.format("YYYYMMDD");
-}
-function getYesterdayDateString(now){
-  return now.subtract(1,"d").format("YYYYMMDD");
-  
-}
 
-async function countUpAsync(connection,date_string){
-  const [resultRows/*,fields*/]=await connection.execute("INSERT INTO counters (date_string, count) VALUES(?, 1) ON DUPLICATE KEY UPDATE count=count+1;",[date_string]);
+async function countUpAsync(connection){
+  const [resultRows/*,fields*/]=await connection.execute("INSERT INTO counters (counter_name, count) VALUES(?, 1) ON DUPLICATE KEY UPDATE count=count+1;",[counterName]);
   console.log(resultRows);
 
 }
 
-async function getCountAsync(connection,date_string){
-  const [countRows/*,fields*/]=await connection.execute("SELECT count FROM counters WHERE date_string=?",[date_string]);
+async function getCountAsync(connection){
+  const [countRows/*,fields*/]=await connection.execute("SELECT count FROM counters WHERE counter_name=?",[counterName]);
   console.log(countRows);
   let count=0;
   if(countRows.length==0){
@@ -49,43 +43,16 @@ async function getCountAsync(connection,date_string){
   return count;
 }
 
-
-async function getTotalAsync(connection){
-  const [totalRows/*,fields*/]=await connection.execute("SELECT SUM(count) as total FROM counters" );
-  console.log(totalRows);
-  if(totalRows.length!=1){
-    throw new Error("totalRows.length must be 1");
-  }
-  if(!totalRows[0].total){
-    throw new Error("total is null");
-  }
-  const total=Number(totalRows[0].total);
-  return total;
-}
-
 app.get("/counter",async (req,res)=>{
   const connection = await mysql.createConnection(dbConfig);
 
   await connection.connect();
 
-  const now=dayjs();
-  const todayDateString=getTodayDateString(now);
-  const yesterdayDateString=getYesterdayDateString(now);
 
-
-  // const [rows/*,fields*/]=await connection.execute("select date_string, count from counters" );
-  // console.log(rows);
-
-  await countUpAsync(connection,todayDateString);
-  
-  const total=await getTotalAsync(connection);
-
-  const today=await getCountAsync(connection,todayDateString);
-  const yesterday=await getCountAsync(connection,yesterdayDateString);
+  await countUpAsync(connection);
+  const count=await getCountAsync(connection);
   const result={
-    total,
-    today,
-    yesterday,
+    count,
   };
   res.json(result);
 });
